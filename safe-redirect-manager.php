@@ -753,16 +753,8 @@ class SRM_Safe_Redirect_Manager {
 
 		$redirects = array();
 
-		if ( $this->default_max_redirects > 50 ) {
-			$posts_per_page = 50;
-		} else { $posts_per_page = $this->default_max_redirects;
-		}
-
-		$i = 1;
-		do {
-
 			$defaults = array(
-				'posts_per_page'     => $posts_per_page,
+				'posts_per_page'     => -1,
 				'post_status'        => 'publish',
 				'paged'              => $i,
                 'orderby'            => 'menu_order',
@@ -787,16 +779,6 @@ class SRM_Safe_Redirect_Manager {
 					'enable_regex'          => (bool) get_post_meta( $redirect->ID, $this->meta_key_enable_redirect_from_regex, true ),
 				);
 			}
-
-			if ( count( $redirects ) == $this->default_max_redirects
-				|| count( $redirect_query->posts ) < $posts_per_page ) {
-				$build = false;
-			} else { $build = true;
-			}
-
-			$i++;
-
-		} while ( $build );
 
 		return $redirects;
 	}
