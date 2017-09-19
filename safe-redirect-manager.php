@@ -73,6 +73,7 @@ class SRM_Safe_Redirect_Manager {
 		add_action( 'parse_request', array( $this, 'action_parse_request' ), 0 );
 		add_action( 'save_post', array( $this, 'action_save_post' ) );
 		add_filter( 'manage_' . $this->redirect_post_type . '_posts_columns' , array( $this, 'filter_redirect_columns' ) );
+		add_filter( 'manage_edit-' . $this->redirect_post_type . '_sortable_columns', array( $this, 'filter_redirect_sortable_columns' ) );
 		add_action( 'manage_' . $this->redirect_post_type . '_posts_custom_column' , array( $this, 'action_custom_redirect_columns' ), 10, 2 );
 		add_action( 'transition_post_status', array( $this, 'action_transition_post_status' ), 10, 3 );
 		add_filter( 'post_updated_messages', array( $this, 'filter_redirect_updated_messages' ) );
@@ -248,11 +249,12 @@ class SRM_Safe_Redirect_Manager {
 	 * @param int    $status_code
 	 * @param bool   $enable_regex
 	 * @param string $post_status
+     * @param int    $menu_order
 	 * @since 1.3
 	 * @uses wp_insert_post, update_post_meta
 	 * @return int|WP_Error
 	 */
-	public function create_redirect( $redirect_from, $redirect_to, $status_code = 302, $enable_regex = false, $post_status = 'publish' ) {
+	public function create_redirect( $redirect_from, $redirect_to, $status_code = 302, $enable_regex = false, $post_status = 'publish', $menu_order = 0 ) {
 		global $wpdb;
 
 		$sanitized_redirect_from = $this->sanitize_redirect_from( $redirect_from );
@@ -260,6 +262,7 @@ class SRM_Safe_Redirect_Manager {
 		$sanitized_status_code = absint( $status_code );
 		$sanitized_enable_regex = (bool) $enable_regex;
 		$sanitized_post_status = sanitize_key( $post_status );
+		$sanitized_menu_order = absint( $menu_order );
 
 		// check and make sure no parameters are empty or invalid after sanitation
 		if ( empty( $sanitized_redirect_from ) || empty( $sanitized_redirect_to ) ) {
@@ -280,6 +283,7 @@ class SRM_Safe_Redirect_Manager {
 			'post_type' => $this->redirect_post_type,
 			'post_status' => $sanitized_post_status,
 			'post_author' => 1,
+            'menu_order' => $sanitized_menu_order,
 		);
 
 		$post_id = wp_insert_post( $post_args );
@@ -503,7 +507,10 @@ class SRM_Safe_Redirect_Manager {
 			echo esc_html( get_post_meta( $post_id, $this->meta_key_redirect_to, true ) );
 		} elseif ( 'srm' . $this->meta_key_redirect_status_code == $column ) {
 			echo absint( get_post_meta( $post_id, $this->meta_key_redirect_status_code, true ) );
-		}
+		} elseif ( 'menu_order' == $column ) {
+			global $post;
+			echo $post->menu_order;
+        }
 	}
 
 	/**
@@ -516,6 +523,7 @@ class SRM_Safe_Redirect_Manager {
 	public function filter_redirect_columns( $columns ) {
 		$columns[ 'srm' . $this->meta_key_redirect_to ] = __( 'Redirect To', 'safe-redirect-manager' );
 		$columns[ 'srm' . $this->meta_key_redirect_status_code ] = __( 'HTTP Status Code', 'safe-redirect-manager' );
+        $columns[ 'menu_order'] = __( 'Order', 'safe-redirect-manager' );
 
 		// Change the title column
 		$columns['title'] = __( 'Redirect From', 'safe-redirect-manager' );
@@ -526,6 +534,17 @@ class SRM_Safe_Redirect_Manager {
 
 		return $columns;
 	}
+
+	/**
+     * Allow menu_order column to be sortable.
+     *
+	 * @param $columns
+	 * @return mixed
+	 */
+	public function filter_redirect_sortable_columns( $columns ) {
+        $columns['menu_order'] = 'menu_order';
+        return $columns;
+    }
 
 	/**
 	 * Saves meta info for redirect rules
@@ -628,7 +647,7 @@ class SRM_Safe_Redirect_Manager {
 			'hierarchical' => false,
 			'register_meta_box_cb' => array( $this, 'action_redirect_rule_metabox' ),
 			'menu_position' => 80,
-			'supports' => array( '' ),
+			'supports' => array( 'page-attributes' ),
 		);
 		register_post_type( $this->redirect_post_type, $redirect_args );
 	}
@@ -746,6 +765,7 @@ class SRM_Safe_Redirect_Manager {
 				'posts_per_page'     => $posts_per_page,
 				'post_status'        => 'publish',
 				'paged'              => $i,
+                'orderby'            => 'menu_order',
 			);
 
 			$query_args = array_merge( $defaults, $args );
@@ -1071,9 +1091,10 @@ class SRM_Safe_Redirect_Manager {
 			$redirect_to = $this->sanitize_redirect_to( $rule[ $args['target'] ] );
 			$status_code = ! empty( $rule[ $args['code'] ] ) ? $rule[ $args['code'] ] : 302;
 			$regex = ! empty( $rule[ $args['regex'] ] ) ? filter_var( $rule[ $args['regex'] ], FILTER_VALIDATE_BOOLEAN ) : false;
+			$menu_order = ! empty( $rule[ $args['order'] ] ) ? $rule[ $args['order'] ] : 0;
 
 			// import
-			$id = $this->create_redirect( $redirect_from, $redirect_to, $status_code, $regex );
+			$id = $this->create_redirect( $redirect_from, $redirect_to, $status_code, $regex, 'publish', $menu_order );
 			if ( is_wp_error( $id ) ) {
 				$doing_wp_cli && WP_CLI::warning( $id );
 				$skipped++;
