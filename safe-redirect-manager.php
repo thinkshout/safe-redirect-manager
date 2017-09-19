@@ -756,8 +756,8 @@ class SRM_Safe_Redirect_Manager {
 			$defaults = array(
 				'posts_per_page'     => -1,
 				'post_status'        => 'publish',
-				'paged'              => $i,
                 'orderby'            => 'menu_order',
+                'order'              => 'ASC',
 			);
 
 			$query_args = array_merge( $defaults, $args );
